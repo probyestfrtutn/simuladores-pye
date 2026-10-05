@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador · Intervalos de confianza</title>
+<style>
+  :root{--bg:#f7f8fa;--card:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0;
+    --accent:#2563eb;--cover:#2563eb;--miss:#dc2626;--ok:#059669}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.5;padding:24px}
+  .wrap{max-width:1080px;margin:0 auto}
+  header h1{font-size:1.5rem;margin:0 0 4px}
+  header p{color:var(--muted);margin:0 0 20px;max-width:74ch}
+  .grid{display:grid;grid-template-columns:320px 1fr;gap:20px}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .card h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 14px}
+  label{display:block;font-size:.85rem;margin:14px 0 4px;font-weight:600}
+  select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;font:inherit}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .pill{display:inline-block;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:2px 9px;font-size:.78rem;font-weight:700}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  button{padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer;font:inherit;font-size:.85rem;font-weight:600;transition:.15s;flex:1 1 auto}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.ghost{color:var(--muted)}
+  .seg{display:flex;gap:6px;margin-top:6px}
+  .seg button{flex:1;font-size:.8rem}
+  .seg button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  canvas{width:100%;display:block}
+  .grid>div{min-width:0}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .stat .lab{font-size:.78rem;color:var(--muted)}
+  .stat .val{font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums}
+  .big{font-size:1.6rem}
+  .cover .val{color:var(--cover)}
+  .note{font-size:.82rem;color:var(--muted);margin-top:10px}
+  .legend{display:flex;gap:16px;font-size:.78rem;color:var(--muted);margin:6px 0 0;flex-wrap:wrap}
+  .legend i{display:inline-block;width:13px;height:13px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+  .fx{font-family:"Cambria Math",Georgia,serif;font-size:.92rem;background:var(--bg);border-radius:8px;padding:8px 10px;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Intervalos de confianza para la media</h1>
+    <p>Un intervalo del 95% no dice que μ esté dentro con probabilidad 0,95: dice que si repitiéramos el muestreo muchas veces, el 95% de los intervalos construidos contendrían el verdadero μ. Generá muestras y observá qué proporción de intervalos cubre μ (línea verde). Los que fallan aparecen en rojo.</p>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Controles</h2>
+      <label for="pop">Población (μ y σ conocidos)</label>
+      <select id="pop">
+        <option value="normal">Normal (μ=50, σ=10)</option>
+        <option value="exp">Exponencial (μ=σ=10)</option>
+        <option value="unif">Uniforme [30, 70]</option>
+      </select>
+
+      <label>Método</label>
+      <div class="seg" id="method">
+        <button data-m="z" class="on">σ conocida · Z</button>
+        <button data-m="t">σ desconocida · t</button>
+      </div>
+      <div class="note" id="methodNote"></div>
+
+      <label>Tamaño de muestra  n = <span class="pill" id="nVal">15</span></label>
+      <input type="range" id="n" min="2" max="100" step="1" value="15">
+
+      <label>Nivel de confianza = <span class="pill" id="confVal">95%</span></label>
+      <input type="range" id="conf" min="80" max="99" step="1" value="95">
+
+      <label>Generar muestras (cada una da un intervalo)</label>
+      <div class="btns">
+        <button data-k="1">+1</button>
+        <button data-k="50">+50</button>
+        <button data-k="500" class="primary">+500</button>
+      </div>
+      <div class="btns"><button id="reset" class="ghost">Reiniciar</button></div>
+
+      <div class="fx" id="fx"></div>
+    </div>
+
+    <div class="card">
+      <h2>Cobertura empírica</h2>
+      <div class="stats">
+        <div class="stat cover"><div class="lab">Cubren μ / total</div><div class="val big" id="covPct">–</div></div>
+        <div class="stat"><div class="lab">Objetivo (nominal)</div><div class="val big" id="target">95%</div></div>
+      </div>
+      <div class="note" id="counts">Intervalos generados: 0 · cubren: 0 · fallan: 0</div>
+
+      <h2 style="margin-top:20px">Últimos intervalos</h2>
+      <canvas id="chart" width="720" height="360"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--cover)"></i>Cubre μ</span>
+        <span><i style="background:var(--miss)"></i>No cubre μ</span>
+        <span><i style="background:var(--ok)"></i>μ verdadero</span>
+      </div>
+      <div class="stats">
+        <div class="stat"><div class="lab">Semiancho medio</div><div class="val" id="hw">–</div></div>
+        <div class="stat"><div class="lab">Valor crítico</div><div class="val" id="crit">–</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== librería estadística =====
+function lngamma(z){const g=7,c=[0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];if(z<0.5)return Math.log(Math.PI/Math.sin(Math.PI*z))-lngamma(1-z);z-=1;let x=c[0];for(let i=1;i<g+2;i++)x+=c[i]/(z+i);const t=z+g+0.5;return 0.5*Math.log(2*Math.PI)+(z+0.5)*Math.log(t)-t+Math.log(x);}
+function betacf(a,b,x){const MAXIT=200,EPS=3e-12,FPMIN=1e-300;let qab=a+b,qap=a+1,qam=a-1,c=1,d=1-qab*x/qap;if(Math.abs(d)<FPMIN)d=FPMIN;d=1/d;let h=d;for(let m=1;m<=MAXIT;m++){let m2=2*m,aa=m*(b-m)*x/((qam+m2)*(a+m2));d=1+aa*d;if(Math.abs(d)<FPMIN)d=FPMIN;c=1+aa/c;if(Math.abs(c)<FPMIN)c=FPMIN;d=1/d;h*=d*c;aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2));d=1+aa*d;if(Math.abs(d)<FPMIN)d=FPMIN;c=1+aa/c;if(Math.abs(c)<FPMIN)c=FPMIN;d=1/d;let del=d*c;h*=del;if(Math.abs(del-1)<EPS)break;}return h;}
+function ibeta(a,b,x){if(x<=0)return 0;if(x>=1)return 1;const lb=lngamma(a+b)-lngamma(a)-lngamma(b);const front=Math.exp(lb+a*Math.log(x)+b*Math.log(1-x));return x<(a+1)/(a+b+2)?front*betacf(a,b,x)/a:1-front*betacf(b,a,1-x)/b;}
+function tCdf(t,df){const x=df/(df+t*t),ib=0.5*ibeta(df/2,0.5,x);return t>0?1-ib:ib;}
+function invNorm(p){const a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00],b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01],c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00],d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00],pl=0.02425;let q,r;if(p<pl){q=Math.sqrt(-2*Math.log(p));return(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}else if(p<=1-pl){q=p-0.5;r=q*q;return(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);}else{q=Math.sqrt(-2*Math.log(1-p));return-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}}
+function invT(p,df){let lo=-100,hi=100;for(let i=0;i<120;i++){const m=(lo+hi)/2;if(tCdf(m,df)<p)lo=m;else hi=m;}return(lo+hi)/2;}
+function randn(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+
+// ===== poblaciones =====
+const pops={
+  normal:{mu:50,sd:10,sample:()=>50+10*randn()},
+  exp:{mu:10,sd:10,sample:()=>-10*Math.log(1-Math.random())},
+  unif:{mu:50,sd:(70-30)/Math.sqrt(12),sample:()=>30+40*Math.random()}
+};
+
+let curKey='normal', cur=pops.normal, method='z';
+let n=15, conf=0.95;
+let intervals=[], nTot=0, nCov=0, sumHW=0;
+
+function reset(){intervals=[];nTot=0;nCov=0;sumHW=0;}
+
+function crit(){
+  const p=1-(1-conf)/2;
+  return method==='z'?invNorm(p):invT(p,n-1);
+}
+
+function addSamples(k){
+  const cval=crit();
+  for(let i=0;i<k;i++){
+    let s=0,s2=0;
+    for(let j=0;j<n;j++){const x=cur.sample();s+=x;s2+=x*x;}
+    const mean=s/n;
+    let se;
+    if(method==='z'){ se=cur.sd/Math.sqrt(n); }
+    else { const varS=Math.max(1e-9,(s2-s*s/n)/(n-1)); se=Math.sqrt(varS)/Math.sqrt(n); }
+    const hw=cval*se, lo=mean-hw, hi=mean+hw;
+    const covers=(lo<=cur.mu&&cur.mu<=hi);
+    nTot++; if(covers)nCov++; sumHW+=hw;
+    intervals.push({mean,lo,hi,covers});
+    if(intervals.length>45)intervals.shift();
+  }
+  render();
+}
+
+function render(){
+  document.getElementById('nVal').textContent=n;
+  document.getElementById('confVal').textContent=Math.round(conf*100)+'%';
+  document.getElementById('target').textContent=Math.round(conf*100)+'%';
+  document.getElementById('covPct').textContent=nTot?((nCov/nTot*100).toFixed(1)+'%'):'–';
+  document.getElementById('counts').textContent=`Intervalos generados: ${nTot} · cubren: ${nCov} · fallan: ${nTot-nCov}`;
+  document.getElementById('hw').textContent=nTot?(sumHW/nTot).toFixed(2):'–';
+  document.getElementById('crit').textContent=crit().toFixed(3)+(method==='z'?'  (z)':`  (t, gl=${n-1})`);
+  const cover=Math.round(conf*100);
+  document.getElementById('fx').innerHTML = method==='z'
+    ? `IC:  x̄ ± z<sub>${(1-(1-conf)/2).toFixed(3)}</sub> · σ/√n<br><span style="color:var(--muted)">σ conocido, se usa la Normal.</span>`
+    : `IC:  x̄ ± t<sub>${(1-(1-conf)/2).toFixed(3)}, ${n-1}</sub> · s/√n<br><span style="color:var(--muted)">σ estimado por s, se usa la t de Student con n−1 gl.</span>`;
+  document.getElementById('methodNote').textContent = method==='z'
+    ? 'Usa σ real de la población y la Normal.'
+    : 'Estima σ con el desvío muestral s y usa la t (n−1 gl).';
+  draw();
+}
+
+const cv=document.getElementById('chart'),ctx=cv.getContext('2d');
+// ---- ajusta la resolución del canvas al ancho real (nítido y legible en el teléfono) ----
+function fit(c,ctx,ratio){
+  const dpr=window.devicePixelRatio||1;
+  const w=Math.max(240,Math.round(c.getBoundingClientRect().width||c.parentElement.clientWidth));
+  const h=Math.round(w*ratio);
+  c.style.height=h+'px';
+  if(c.width!==Math.round(w*dpr)||c.height!==Math.round(h*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);}
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  return {W:w,H:h};
+}
+let lastW=0;
+window.addEventListener('resize',()=>{const w=window.innerWidth;if(w!==lastW){lastW=w;render();}});
+
+function draw(){
+  const {W,H}=fit(cv,ctx,window.innerWidth<560?1.0:0.5),pad={l:14,r:14,t:12,b:26},pw=W-pad.l-pad.r,ph=H-pad.t-pad.b;
+  ctx.clearRect(0,0,W,H);
+  // rango x: μ ± 4·(σ/√n) (aprox generoso)
+  const spread=4*cur.sd/Math.sqrt(n)+ (sumHW/Math.max(1,nTot));
+  const lo=cur.mu-spread, hi=cur.mu+spread;
+  const xToPx=x=>pad.l+(x-lo)/(hi-lo)*pw;
+  // μ line
+  ctx.strokeStyle='#059669';ctx.lineWidth=2;
+  ctx.beginPath();ctx.moveTo(xToPx(cur.mu),pad.t);ctx.lineTo(xToPx(cur.mu),pad.t+ph);ctx.stroke();
+  // intervals stacked
+  const k=intervals.length;
+  if(k){
+    const rowH=ph/Math.max(k,1);
+    intervals.forEach((iv,idx)=>{
+      const y=pad.t+rowH*(idx+0.5);
+      const col=iv.covers?'#2563eb':'#dc2626';
+      ctx.strokeStyle=col;ctx.lineWidth=Math.min(3,Math.max(1.4,rowH*0.4));
+      const x0=Math.max(pad.l,xToPx(iv.lo)),x1=Math.min(W-pad.r,xToPx(iv.hi));
+      ctx.beginPath();ctx.moveTo(x0,y);ctx.lineTo(x1,y);ctx.stroke();
+      // mean dot
+      ctx.fillStyle=col;ctx.beginPath();ctx.arc(xToPx(iv.mean),y,Math.min(2.6,rowH*0.35),0,7);ctx.fill();
+    });
+  }
+  // axis labels
+  ctx.fillStyle='#64748b';ctx.font='11px sans-serif';ctx.textAlign='center';
+  for(let i=0;i<=4;i++){const x=lo+(hi-lo)*i/4;ctx.fillText(x.toFixed(1),xToPx(x),H-8);}
+  ctx.fillStyle='#059669';ctx.font='bold 11px sans-serif';ctx.fillText('μ='+cur.mu,xToPx(cur.mu),pad.t-1);
+}
+
+// eventos
+document.getElementById('pop').addEventListener('change',e=>{curKey=e.target.value;cur=pops[curKey];reset();render();});
+document.querySelectorAll('#method button').forEach(b=>b.addEventListener('click',()=>{
+  method=b.dataset.m;document.querySelectorAll('#method button').forEach(x=>x.classList.toggle('on',x===b));reset();render();
+}));
+document.getElementById('n').addEventListener('input',e=>{n=+e.target.value;reset();render();});
+document.getElementById('conf').addEventListener('input',e=>{conf=+e.target.value/100;reset();render();});
+document.querySelectorAll('button[data-k]').forEach(b=>b.addEventListener('click',()=>addSamples(+b.dataset.k)));
+document.getElementById('reset').addEventListener('click',()=>{reset();render();});
+
+render();
+</script>
+</body>
+</html>
