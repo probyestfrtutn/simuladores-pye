@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador · La distribución del p-valor</title>
+<style>
+  :root{--bg:#f7f8fa;--card:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0;
+    --accent:#2563eb;--rej:#dc2626;--ok:#059669}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.5;padding:24px}
+  .wrap{max-width:1080px;margin:0 auto}
+  header h1{font-size:1.5rem;margin:0 0 4px}
+  header p{color:var(--muted);margin:0 0 20px;max-width:80ch}
+  .grid{display:grid;grid-template-columns:330px 1fr;gap:20px}
+  .grid>div{min-width:0}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .card h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 14px}
+  label{display:block;font-size:.85rem;margin:14px 0 4px;font-weight:600}
+  select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;font:inherit}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .pill{display:inline-block;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:2px 9px;font-size:.78rem;font-weight:700}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  button{padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer;font:inherit;font-size:.85rem;font-weight:600;transition:.15s;flex:1 1 auto}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.ghost{color:var(--muted)}
+  canvas{width:100%;display:block}
+  .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:14px}
+  @media(max-width:560px){.stats{grid-template-columns:1fr 1fr}}
+  .stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .stat .lab{font-size:.78rem;color:var(--muted)}
+  .stat .val{font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat.r .val{color:var(--rej)}
+  .note{font-size:.82rem;color:var(--muted);margin-top:10px}
+  .legend{display:flex;gap:14px;font-size:.78rem;color:var(--muted);margin:8px 0 0;flex-wrap:wrap}
+  .legend i{display:inline-block;width:13px;height:13px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+  .legend i.ln{height:0;border-top:2px dashed #334155;border-radius:0;width:18px;vertical-align:4px}
+  .verdict{margin-top:14px;padding:12px 14px;border-radius:10px;background:#f1f5f9;border:1px solid var(--line);font-size:.9rem}
+  .last{margin-top:14px;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:#fff;font-size:.9rem}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+  .chip{font-variant-numeric:tabular-nums;font-size:.78rem;font-weight:700;padding:2px 8px;border-radius:999px;background:#eff6ff;color:#1d4ed8}
+  .chip.r{background:#fee2e2;color:#b91c1c}
+  .sep{border:0;border-top:1px solid var(--line);margin:18px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>La distribución del p-valor</h1>
+    <p>Cada prueba toma una muestra de resistencias, calcula el estadístico t para H<sub>0</sub>: μ = 100 Ω y devuelve un p-valor. Al repetir miles de veces se ve la forma de esa distribución. Con <b>δ = 0</b> (H<sub>0</sub> verdadera) el p-valor es <b>uniforme</b> entre 0 y 1. Con un efecto real (δ &gt; 0) los p-valores se juntan cerca de 0.</p>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Controles</h2>
+
+      <label>Tamaño de muestra: n = <span class="pill" id="nVal">20</span></label>
+      <input type="range" id="n" min="3" max="200" step="1" value="20">
+
+      <label>Desvío poblacional: σ = <span class="pill" id="sVal">5</span> Ω</label>
+      <input type="range" id="s" min="1" max="15" step="0.5" value="5">
+
+      <label>Efecto real: δ = μ − 100 = <span class="pill" id="dVal">0</span> Ω</label>
+      <input type="range" id="d" min="0" max="6" step="0.5" value="0">
+      <div class="note">δ = 0 significa que H<sub>0</sub> es verdadera.</div>
+
+      <label for="alpha">Nivel de significación α</label>
+      <select id="alpha">
+        <option value="0.01">0,01</option>
+        <option value="0.05" selected>0,05</option>
+        <option value="0.10">0,10</option>
+      </select>
+
+      <hr class="sep">
+      <label>Simular pruebas (cada una da un p-valor)</label>
+      <div class="btns">
+        <button id="b1">+1 prueba</button>
+        <button id="b100">+100 pruebas</button>
+        <button id="b1000" class="primary">+1000 pruebas</button>
+      </div>
+      <div class="btns"><button id="reset" class="ghost">Reiniciar</button></div>
+      <p class="note">Prueba t de Student para una media, bilateral, con σ desconocida. Las poblaciones son normales.</p>
+    </div>
+
+    <div class="card">
+      <h2>Histograma de p-valores</h2>
+      <canvas id="chart" width="720" height="330"></canvas>
+      <div class="legend">
+        <span><i style="background:#93c5fd"></i>p ≥ α (no rechaza)</span>
+        <span><i style="background:#dc2626"></i>p &lt; α (rechaza H<sub>0</sub>)</span>
+        <span><i class="ln"></i>Si el p-valor fuera uniforme: 5 % por barra</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="lab">Pruebas simuladas</div><div class="val" id="vN">0</div></div>
+        <div class="stat r"><div class="lab">Con p &lt; α</div><div class="val" id="vA">–</div></div>
+        <div class="stat"><div class="lab">Con p &lt; 0,50</div><div class="val" id="vH">–</div></div>
+      </div>
+
+      <div class="verdict" id="verdict">Tocá «+1000 pruebas» para simular.</div>
+
+      <div class="last" id="last">
+        <b>Últimos p-valores</b> <span style="color:var(--muted)">(en rojo, los que rechazan H<sub>0</sub>)</span>
+        <div class="chips" id="chips"><span class="note" style="margin:0">Todavía no hay pruebas.</span></div>
+        <div id="lastDetail" class="note"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== librería estadística =====
+function lngamma(z){const g=7,c=[0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];if(z<0.5)return Math.log(Math.PI/Math.sin(Math.PI*z))-lngamma(1-z);z-=1;let x=c[0];for(let i=1;i<g+2;i++)x+=c[i]/(z+i);const t=z+g+0.5;return 0.5*Math.log(2*Math.PI)+(z+0.5)*Math.log(t)-t+Math.log(x);}
+function betacf(a,b,x){const MAXIT=200,EPS=3e-12,FPMIN=1e-300;let qab=a+b,qap=a+1,qam=a-1,c=1,d=1-qab*x/qap;if(Math.abs(d)<FPMIN)d=FPMIN;d=1/d;let h=d;for(let m=1;m<=MAXIT;m++){let m2=2*m,aa=m*(b-m)*x/((qam+m2)*(a+m2));d=1+aa*d;if(Math.abs(d)<FPMIN)d=FPMIN;c=1+aa/c;if(Math.abs(c)<FPMIN)c=FPMIN;d=1/d;h*=d*c;aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2));d=1+aa*d;if(Math.abs(d)<FPMIN)d=FPMIN;c=1+aa/c;if(Math.abs(c)<FPMIN)c=FPMIN;d=1/d;let del=d*c;h*=del;if(Math.abs(del-1)<EPS)break;}return h;}
+function ibeta(a,b,x){if(x<=0)return 0;if(x>=1)return 1;const lb=lngamma(a+b)-lngamma(a)-lngamma(b);const front=Math.exp(lb+a*Math.log(x)+b*Math.log(1-x));return x<(a+1)/(a+b+2)?front*betacf(a,b,x)/a:1-front*betacf(b,a,1-x)/b;}
+function pTwo(t,df){const x=df/(df+t*t);return ibeta(df/2,0.5,x);}
+function randn(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+
+// ===== estado =====
+const MU0=100, BINS=20;
+let P={n:20,s:5,d:0,alpha:0.05};
+let N=0,cntA=0,cntH=0,bins=new Array(BINS).fill(0),recent=[],last=null;
+function resetSim(){N=0;cntA=0;cntH=0;bins=new Array(BINS).fill(0);recent=[];last=null;}
+
+function oneTest(){
+  const {n,s,d}=P;
+  let a=0,a2=0;
+  for(let j=0;j<n;j++){const x=MU0+d+s*randn();a+=x;a2+=x*x;}
+  const m=a/n, v=Math.max(1e-12,(a2-a*a/n)/(n-1)), se=Math.sqrt(v/n);
+  const t=(m-MU0)/se, p=pTwo(t,n-1);
+  return {m,sd:Math.sqrt(v),t,p};
+}
+
+function simulate(k){
+  for(let i=0;i<k;i++){
+    const r=oneTest();
+    let b=Math.floor(r.p*BINS);if(b>=BINS)b=BINS-1;
+    bins[b]++;N++;
+    if(r.p<P.alpha)cntA++;
+    if(r.p<0.5)cntH++;
+    recent.push(r.p);if(recent.length>20)recent.shift();
+    last=r;
+  }
+  render();
+}
+
+// ===== canvas =====
+const cv=document.getElementById('chart'),ctx=cv.getContext('2d');
+function fit(c,cx,ratio){
+  const dpr=window.devicePixelRatio||1;
+  const w=Math.max(240,Math.round(c.getBoundingClientRect().width||c.parentElement.clientWidth));
+  const h=Math.round(w*ratio);
+  c.style.height=h+'px';
+  if(c.width!==Math.round(w*dpr)||c.height!==Math.round(h*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);}
+  cx.setTransform(dpr,0,0,dpr,0,0);
+  return {W:w,H:h};
+}
+let lastW=0;
+window.addEventListener('resize',()=>{const w=window.innerWidth;if(w!==lastW){lastW=w;render();}});
+
+function fmt(x,d){return x.toFixed(d).replace('.',',');}
+function pct(x,d=1){return fmt(x*100,d)+' %';}
+function fp(p){return p<0.001?'< 0,001':fmt(p,3);}
+
+function draw(){
+  const {W,H}=fit(cv,ctx,window.innerWidth<560?0.8:0.45);
+  const pad={l:44,r:12,t:16,b:34},pw=W-pad.l-pad.r,ph=H-pad.t-pad.b,base=pad.t+ph;
+  ctx.clearRect(0,0,W,H);
+  const fr=bins.map(c=>N?c/N:0), expect=1/BINS;
+  let ymax=Math.max(0.1,expect*1.6,Math.max(...fr)*1.15);
+  ymax=Math.min(1,ymax);
+  const yPx=v=>base-ph*v/ymax, xPx=x=>pad.l+x*pw;
+  // grilla
+  ctx.font='12px sans-serif';ctx.textAlign='right';ctx.fillStyle='#64748b';ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const v=ymax*i/4,y=yPx(v);
+    ctx.strokeStyle='#e2e8f0';ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
+    const lv=v*100;
+    ctx.fillText(fmt(lv,Math.abs(lv-Math.round(lv))>0.05?1:0)+'%',pad.l-6,y+4);
+  }
+  // barras
+  const bw=pw/BINS;
+  for(let b=0;b<BINS;b++){
+    const x0=xPx(b/BINS),x1=xPx((b+1)/BINS),y=yPx(fr[b]),h=base-y;
+    if(h<=0)continue;
+    ctx.fillStyle='#93c5fd';ctx.fillRect(x0+1,y,Math.max(1,x1-x0-2),h);
+    const lo=b/BINS,hi=(b+1)/BINS;
+    if(lo<P.alpha){
+      const cut=Math.min(hi,P.alpha);
+      ctx.fillStyle='#dc2626';ctx.fillRect(x0+1,y,Math.max(1,xPx(cut)-x0-(cut>=hi?2:1)),h);
+    }
+  }
+  // línea esperada si fuera uniforme
+  ctx.strokeStyle='#334155';ctx.lineWidth=1.6;ctx.setLineDash([6,4]);
+  ctx.beginPath();ctx.moveTo(pad.l,yPx(expect));ctx.lineTo(W-pad.r,yPx(expect));ctx.stroke();ctx.setLineDash([]);
+  // línea α
+  ctx.strokeStyle='#dc2626';ctx.lineWidth=1.6;
+  ctx.beginPath();ctx.moveTo(xPx(P.alpha),pad.t);ctx.lineTo(xPx(P.alpha),base);ctx.stroke();
+  ctx.fillStyle='#dc2626';ctx.font='bold 12px sans-serif';ctx.textAlign='left';
+  ctx.fillText('α',xPx(P.alpha)+4,pad.t+10);
+  // eje x
+  ctx.strokeStyle='#cbd5e1';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad.l,base);ctx.lineTo(W-pad.r,base);ctx.stroke();
+  ctx.fillStyle='#64748b';ctx.font='12px sans-serif';ctx.textAlign='center';
+  [0,0.25,0.5,0.75,1].forEach(x=>ctx.fillText(fmt(x,2),xPx(x),H-12));
+  ctx.textAlign='right';ctx.fillText('p-valor',W-pad.r,H-1);
+}
+
+function render(){
+  document.getElementById('nVal').textContent=P.n;
+  document.getElementById('sVal').textContent=fmt(P.s,P.s%1?1:0);
+  document.getElementById('dVal').textContent=fmt(P.d,P.d%1?1:0);
+  document.getElementById('vN').textContent=N.toLocaleString('es');
+  document.getElementById('vA').textContent=N?pct(cntA/N):'–';
+  document.getElementById('vH').textContent=N?pct(cntH/N):'–';
+
+  const v=document.getElementById('verdict');
+  const a=P.alpha;
+  if(N<200){
+    v.innerHTML='Simulá unos cientos de pruebas para ver la forma (tocá «+1000 pruebas»).';
+  } else if(P.d===0){
+    const margA=1.96*Math.sqrt(a*(1-a)/N), margH=1.96*Math.sqrt(0.25/N);
+    const okA=Math.abs(cntA/N-a)<=margA, okH=Math.abs(cntH/N-0.5)<=margH;
+    v.innerHTML='Con H<sub>0</sub> verdadera el histograma es <b>plano</b>: todos los valores de p son igual de probables. Por eso P(p &lt; α) = α: aquí <b>'+pct(cntA/N)+'</b> (esperado '+pct(a)+', '+(okA?'dentro del margen':'fuera del margen por azar')+') y P(p &lt; 0,50) = 50 %: aquí <b>'+pct(cntH/N)+'</b> ('+(okH?'dentro del margen':'fuera del margen por azar')+'). <span style="color:var(--muted)">Un p pequeño aparece sin que haya ningún efecto, y aparece justo con frecuencia α.</span>';
+  } else {
+    v.innerHTML='Con un efecto real (δ = '+fmt(P.d,P.d%1?1:0)+' Ω) los p-valores se acumulan cerca de 0. La proporción con p &lt; α, <b>'+pct(cntA/N)+'</b>, es la <b>potencia</b> de la prueba en este escenario. <span style="color:var(--muted)">Probá subir n: el histograma se apila contra el 0. Volvé a δ = 0 para ver el caso plano.</span>';
+  }
+
+  const chips=document.getElementById('chips');
+  if(recent.length){
+    chips.innerHTML=recent.map(p=>'<span class="chip'+(p<a?' r':'')+'">'+fp(p)+'</span>').join('');
+  } else chips.innerHTML='<span class="note" style="margin:0">Todavía no hay pruebas.</span>';
+  const ld=document.getElementById('lastDetail');
+  if(last){
+    ld.innerHTML='Última prueba: x̄ = '+fmt(last.m,2)+' Ω, s = '+fmt(last.sd,2)+' Ω, t = '+fmt(last.t,2)+', p = '+fp(last.p)+' → '+(last.p<a?'<b style="color:var(--rej)">rechaza H<sub>0</sub></b>':'no rechaza H<sub>0</sub>')+'.';
+  } else ld.textContent='';
+  draw();
+}
+
+// ===== eventos =====
+['n','s','d'].forEach(id=>document.getElementById(id).addEventListener('input',e=>{P[id]=+e.target.value;resetSim();render();}));
+document.getElementById('alpha').addEventListener('change',e=>{
+  P.alpha=+e.target.value;
+  // recalcula contadores que dependen de α con lo guardado en el histograma no es exacto: se reinicia
+  resetSim();render();
+});
+document.getElementById('b1').addEventListener('click',()=>simulate(1));
+document.getElementById('b100').addEventListener('click',()=>simulate(100));
+document.getElementById('b1000').addEventListener('click',()=>simulate(1000));
+document.getElementById('reset').addEventListener('click',()=>{resetSim();render();});
+
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador · Errores tipo I y II, y potencia</title>
+<style>
+  :root{--bg:#f7f8fa;--card:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0;
+    --accent:#2563eb;--h0:#2563eb;--h1:#d97706;--alpha:#dc2626;--beta:#d97706;--power:#059669}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.5;padding:24px}
+  .wrap{max-width:1080px;margin:0 auto}
+  header h1{font-size:1.5rem;margin:0 0 4px}
+  header p{color:var(--muted);margin:0 0 20px;max-width:80ch}
+  .grid{display:grid;grid-template-columns:330px 1fr;gap:20px}
+  .grid>div{min-width:0}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .card h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 14px}
+  label{display:block;font-size:.85rem;margin:14px 0 4px;font-weight:600}
+  select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;font:inherit}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .pill{display:inline-block;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:2px 9px;font-size:.78rem;font-weight:700}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  button{padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer;font:inherit;font-size:.85rem;font-weight:600;transition:.15s;flex:1 1 auto}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.ghost{color:var(--muted)}
+  .seg{display:flex;gap:6px;margin-top:6px}
+  .seg button{flex:1;font-size:.8rem}
+  .seg button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  canvas{width:100%;display:block}
+  .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:14px}
+  @media(max-width:560px){.stats{grid-template-columns:1fr 1fr}}
+  .stats.two{grid-template-columns:1fr 1fr}
+  .stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .stat .lab{font-size:.78rem;color:var(--muted)}
+  .stat .val{font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat.a .val{color:var(--alpha)} .stat.b .val{color:var(--beta)} .stat.p .val{color:var(--power)}
+  .note{font-size:.82rem;color:var(--muted);margin-top:10px}
+  .legend{display:flex;gap:14px;font-size:.78rem;color:var(--muted);margin:8px 0 0;flex-wrap:wrap}
+  .legend i{display:inline-block;width:13px;height:13px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+  .verdict{margin-top:14px;padding:12px 14px;border-radius:10px;background:#f1f5f9;border:1px solid var(--line);font-size:.9rem}
+  .sep{border:0;border-top:1px solid var(--line);margin:18px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Errores tipo I y II, y potencia</h1>
+    <p>Una fábrica afirma que sus resistencias miden en promedio μ<sub>0</sub> = 100 Ω (H<sub>0</sub>). Supongamos que en realidad miden μ<sub>1</sub> = 100 + δ (H<sub>1</sub>). Las dos curvas son la distribución de la media muestral x̄ bajo cada hipótesis. Mové n, δ y α, y mirá cómo se reparten las áreas.</p>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Controles</h2>
+
+      <label>Tipo de prueba</label>
+      <div class="seg" id="tipo">
+        <button data-t="bi" class="on">Bilateral</button>
+        <button data-t="uni">Unilateral (H<sub>1</sub>: μ &gt; μ<sub>0</sub>)</button>
+      </div>
+
+      <label>Tamaño de muestra: n = <span class="pill" id="nVal">30</span></label>
+      <input type="range" id="n" min="4" max="200" step="1" value="30">
+
+      <label>Desvío poblacional: σ = <span class="pill" id="sVal">5</span> Ω</label>
+      <input type="range" id="s" min="1" max="15" step="0.5" value="5">
+
+      <label>Efecto real: δ = μ<sub>1</sub> − μ<sub>0</sub> = <span class="pill" id="dVal">2</span> Ω</label>
+      <input type="range" id="d" min="0" max="10" step="0.5" value="2">
+
+      <label for="alpha">Nivel de significación α</label>
+      <select id="alpha">
+        <option value="0.01">0,01</option>
+        <option value="0.05" selected>0,05</option>
+        <option value="0.10">0,10</option>
+      </select>
+
+      <hr class="sep">
+      <label>Verificar por simulación</label>
+      <div class="btns">
+        <button id="sim1">+1000 pruebas</button>
+        <button id="sim2" class="primary">+5000 pruebas</button>
+      </div>
+      <div class="btns"><button id="reset" class="ghost">Reiniciar</button></div>
+      <p class="note">Cada prueba toma una muestra de tamaño n bajo H<sub>0</sub> y otra bajo H<sub>1</sub>, calcula z = (x̄ − μ<sub>0</sub>)/(σ/√n) y decide.</p>
+    </div>
+
+    <div class="card">
+      <h2>Las dos distribuciones de x̄</h2>
+      <canvas id="chart" width="720" height="330"></canvas>
+      <div class="legend">
+        <span><i style="background:rgba(220,38,38,.6)"></i>α: rechazar H<sub>0</sub> siendo verdadera (error tipo I)</span>
+        <span><i style="background:rgba(217,119,6,.45)"></i>β: no rechazar H<sub>0</sub> siendo falsa (error tipo II)</span>
+        <span><i style="background:rgba(5,150,105,.45)"></i>Potencia (1 − β): detectar el efecto</span>
+      </div>
+      <div class="legend">
+        <span><i style="background:var(--h0)"></i>Curva bajo H<sub>0</sub> (centrada en μ<sub>0</sub>)</span>
+        <span><i style="background:var(--h1)"></i>Curva bajo H<sub>1</sub> (centrada en μ<sub>1</sub>)</span>
+        <span>Línea punteada: valor crítico</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat a"><div class="lab">α (error tipo I)</div><div class="val" id="vA">–</div></div>
+        <div class="stat b"><div class="lab">β (error tipo II)</div><div class="val" id="vB">–</div></div>
+        <div class="stat p"><div class="lab">Potencia (1 − β)</div><div class="val" id="vP">–</div></div>
+        <div class="stat"><div class="lab">Error estándar σ/√n</div><div class="val" id="vSE">–</div></div>
+        <div class="stat"><div class="lab">Valor crítico de x̄</div><div class="val" id="vC">–</div></div>
+        <div class="stat"><div class="lab">n para potencia 80 %</div><div class="val" id="vN">–</div></div>
+      </div>
+
+      <div class="verdict" id="verdict"></div>
+
+      <h2 style="margin-top:20px">Comprobación empírica</h2>
+      <div class="stats two">
+        <div class="stat a"><div class="lab">Rechazó con H<sub>0</sub> verdadera (≈ α)</div><div class="val" id="eA">–</div></div>
+        <div class="stat p"><div class="lab">Rechazó con H<sub>1</sub> verdadera (≈ potencia)</div><div class="val" id="eP">–</div></div>
+      </div>
+      <div class="note" id="eN">Pruebas simuladas: 0</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== estadística =====
+function erf(x){const s=x<0?-1:1;x=Math.abs(x);const t=1/(1+0.3275911*x);
+  const y=1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x);return s*y;}
+function Phi(x){return 0.5*(1+erf(x/Math.SQRT2));}
+function invNorm(p){const a=[-3.969683028665376e+01,2.209460984245205e+02,-2.759285104469687e+02,1.383577518672690e+02,-3.066479806614716e+01,2.506628277459239e+00],b=[-5.447609879822406e+01,1.615858368580409e+02,-1.556989798598866e+02,6.680131188771972e+01,-1.328068155288572e+01],c=[-7.784894002430293e-03,-3.223964580411365e-01,-2.400758277161838e+00,-2.549732539343734e+00,4.374664141464968e+00,2.938163982698783e+00],d=[7.784695709041462e-03,3.224671290700398e-01,2.445134137142996e+00,3.754408661907416e+00],pl=0.02425;let q,r;if(p<pl){q=Math.sqrt(-2*Math.log(p));return(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}else if(p<=1-pl){q=p-0.5;r=q*q;return(((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q/(((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1);}else{q=Math.sqrt(-2*Math.log(1-p));return-(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5])/((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1);}}
+function randn(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+
+// ===== estado =====
+const MU0=100;
+let P={tipo:'bi',n:30,s:5,d:2,alpha:0.05};
+let N=0,rejH0=0,rejH1=0;
+function resetSim(){N=0;rejH0=0;rejH1=0;}
+
+function calc(){
+  const se=P.s/Math.sqrt(P.n), lam=P.d/se;
+  const zc=P.tipo==='bi'?invNorm(1-P.alpha/2):invNorm(1-P.alpha);
+  let beta,power;
+  if(P.tipo==='bi'){ power=(1-Phi(zc-lam))+Phi(-zc-lam); }
+  else { power=1-Phi(zc-lam); }
+  beta=1-power;
+  // n para potencia 80% (aprox., ignora la cola lejana en la bilateral)
+  const z80=invNorm(0.8);
+  let n80=null;
+  if(P.d>0){ n80=Math.ceil(Math.pow((zc+z80)*P.s/P.d,2)); n80=Math.max(2,n80); }
+  return {se,lam,zc,beta,power,n80};
+}
+
+function simulate(k){
+  const {lam,zc}=calc(), n=P.n, rn=Math.sqrt(n);
+  for(let i=0;i<k;i++){
+    let s0=0,s1=0;
+    for(let j=0;j<n;j++){s0+=randn();s1+=randn();}
+    const z0=s0/rn, z1=s1/rn+lam;
+    if(P.tipo==='bi'){ if(Math.abs(z0)>zc)rejH0++; if(Math.abs(z1)>zc)rejH1++; }
+    else { if(z0>zc)rejH0++; if(z1>zc)rejH1++; }
+    N++;
+  }
+  render();
+}
+
+// ===== canvas =====
+const cv=document.getElementById('chart'),ctx=cv.getContext('2d');
+function fit(c,cx,ratio){
+  const dpr=window.devicePixelRatio||1;
+  const w=Math.max(240,Math.round(c.getBoundingClientRect().width||c.parentElement.clientWidth));
+  const h=Math.round(w*ratio);
+  c.style.height=h+'px';
+  if(c.width!==Math.round(w*dpr)||c.height!==Math.round(h*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);}
+  cx.setTransform(dpr,0,0,dpr,0,0);
+  return {W:w,H:h};
+}
+let lastW=0;
+window.addEventListener('resize',()=>{const w=window.innerWidth;if(w!==lastW){lastW=w;render();}});
+
+function fmt(x,d){return x.toFixed(d).replace('.',',');}
+function pct(x,d=1){return fmt(x*100,d)+' %';}
+
+function draw(){
+  const {W,H}=fit(cv,ctx,window.innerWidth<560?0.75:0.45);
+  const pad={l:12,r:12,t:26,b:30},pw=W-pad.l-pad.r,ph=H-pad.t-pad.b,base=pad.t+ph;
+  ctx.clearRect(0,0,W,H);
+  const {se,zc}=calc(), mu1=MU0+P.d;
+  const lo=Math.min(MU0,mu1)-4*se, hi=Math.max(MU0,mu1)+4*se;
+  const xPx=x=>pad.l+(x-lo)/(hi-lo)*pw;
+  const dens=(x,mu)=>Math.exp(-0.5*((x-mu)/se)**2)/(se*Math.sqrt(2*Math.PI));
+  const ymax=dens(MU0,MU0)*1.12, yPx=v=>base-ph*v/ymax;
+
+  function region(mu,a,b,color){
+    a=Math.max(a,lo);b=Math.min(b,hi);if(a>=b)return;
+    const steps=140;ctx.beginPath();ctx.moveTo(xPx(a),base);
+    for(let i=0;i<=steps;i++){const x=a+(b-a)*i/steps;ctx.lineTo(xPx(x),yPx(dens(x,mu)));}
+    ctx.lineTo(xPx(b),base);ctx.closePath();ctx.fillStyle=color;ctx.fill();
+  }
+  const cHi=MU0+zc*se, cLo=MU0-zc*se;
+  const cBETA='rgba(217,119,6,.45)', cPOW='rgba(5,150,105,.45)', cALPHA='rgba(220,38,38,.6)';
+  if(P.tipo==='bi'){
+    region(mu1,cLo,cHi,cBETA);
+    region(mu1,lo,cLo,cPOW); region(mu1,cHi,hi,cPOW);
+    region(MU0,lo,cLo,cALPHA); region(MU0,cHi,hi,cALPHA);
+  } else {
+    region(mu1,lo,cHi,cBETA);
+    region(mu1,cHi,hi,cPOW);
+    region(MU0,cHi,hi,cALPHA);
+  }
+  // curvas
+  function curve(mu,col,dash){
+    ctx.beginPath();
+    for(let i=0;i<=300;i++){const x=lo+(hi-lo)*i/300;const px=xPx(x),py=yPx(dens(x,mu));i?ctx.lineTo(px,py):ctx.moveTo(px,py);}
+    ctx.strokeStyle=col;ctx.lineWidth=2.4;ctx.setLineDash(dash||[]);ctx.stroke();ctx.setLineDash([]);
+  }
+  curve(MU0,'#2563eb');
+  if(P.d>0)curve(mu1,'#d97706');
+  // eje
+  ctx.strokeStyle='#cbd5e1';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad.l,base);ctx.lineTo(W-pad.r,base);ctx.stroke();
+  ctx.fillStyle='#64748b';ctx.font='12px sans-serif';ctx.textAlign='center';
+  for(let i=0;i<=4;i++){const x=lo+(hi-lo)*i/4;ctx.fillText(fmt(x,1),xPx(x),H-10);}
+  // valores críticos
+  ctx.strokeStyle='#334155';ctx.lineWidth=1.6;ctx.setLineDash([5,4]);
+  const lines=P.tipo==='bi'?[cLo,cHi]:[cHi];
+  lines.forEach(x=>{if(x>lo&&x<hi){ctx.beginPath();ctx.moveTo(xPx(x),pad.t-6);ctx.lineTo(xPx(x),base);ctx.stroke();}});
+  ctx.setLineDash([]);
+  ctx.fillStyle='#334155';ctx.font='bold 12px sans-serif';
+  lines.forEach(x=>{if(x>lo&&x<hi)ctx.fillText('x̄c',xPx(x),pad.t-9);});
+  // μ0 y μ1
+  ctx.font='bold 12px sans-serif';
+  ctx.fillStyle='#2563eb';ctx.textAlign='center';
+  const x0=xPx(MU0),x1=xPx(mu1);
+  ctx.fillText('μ0',x0+(P.d>0?-12:0),yPx(dens(MU0,MU0))-6);
+  if(P.d>0){ctx.fillStyle='#d97706';ctx.fillText('μ1',x1+12,yPx(dens(MU0,MU0))-6);}
+}
+
+function render(){
+  document.getElementById('nVal').textContent=P.n;
+  document.getElementById('sVal').textContent=fmt(P.s,P.s%1?1:0);
+  document.getElementById('dVal').textContent=fmt(P.d,P.d%1?1:0);
+  const c=calc();
+  document.getElementById('vA').textContent=pct(P.alpha);
+  document.getElementById('vB').textContent=pct(c.beta);
+  document.getElementById('vP').textContent=pct(c.power);
+  document.getElementById('vSE').textContent=fmt(c.se,2)+' Ω';
+  document.getElementById('vC').textContent=P.tipo==='bi'
+    ? fmt(MU0-c.zc*c.se,2)+' y '+fmt(MU0+c.zc*c.se,2)
+    : fmt(MU0+c.zc*c.se,2);
+  document.getElementById('vN').textContent=c.n80?('n ≥ '+c.n80):'–';
+
+  const v=document.getElementById('verdict');
+  if(P.d===0){
+    v.innerHTML='Con δ = 0 las dos hipótesis coinciden: no hay ningún efecto que detectar. La «potencia» es igual a α ('+pct(P.alpha)+') y β = 1 − α. Es la situación en la que rechazar H<sub>0</sub> es, por definición, un error tipo I.';
+  } else {
+    let t='La prueba detecta el efecto el <b>'+pct(c.power)+'</b> de las veces (potencia) y lo pasa por alto el <b>'+pct(c.beta)+'</b> (error tipo II). ';
+    if(c.power>=0.8) t+='Ya alcanza la potencia de 80 % que suele pedirse. ';
+    else t+='Para llegar a 80 % de potencia con este α hacen falta alrededor de <b>n = '+c.n80+'</b>. ';
+    t+='<br><span style="color:var(--muted)">Para subir la potencia sin subir α: aumentá n, o bajá σ si podés medir mejor. Si subís α, la potencia sube, pero a costa de más falsos positivos.</span>';
+    v.innerHTML=t;
+  }
+
+  document.getElementById('eA').textContent=N?pct(rejH0/N):'–';
+  document.getElementById('eP').textContent=N?pct(rejH1/N):'–';
+  document.getElementById('eN').textContent='Pruebas simuladas: '+N.toLocaleString('es');
+  draw();
+}
+
+// ===== eventos =====
+document.querySelectorAll('#tipo button').forEach(b=>b.addEventListener('click',()=>{
+  P.tipo=b.dataset.t;document.querySelectorAll('#tipo button').forEach(x=>x.classList.toggle('on',x===b));resetSim();render();
+}));
+[['n','n'],['s','s'],['d','d']].forEach(([id,key])=>document.getElementById(id).addEventListener('input',e=>{P[key]=+e.target.value;resetSim();render();}));
+document.getElementById('alpha').addEventListener('change',e=>{P.alpha=+e.target.value;resetSim();render();});
+document.getElementById('sim1').addEventListener('click',()=>simulate(1000));
+document.getElementById('sim2').addEventListener('click',()=>simulate(5000));
+document.getElementById('reset').addEventListener('click',()=>{resetSim();render();});
+
+render();
+</script>
+</body>
+</html>

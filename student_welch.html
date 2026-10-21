@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador · t de Student vs. t de Welch</title>
+<style>
+  :root{--bg:#f7f8fa;--card:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0;
+    --accent:#2563eb;--stu:#2563eb;--wel:#d97706;--nom:#dc2626;--ok:#059669}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.5;padding:24px}
+  .wrap{max-width:1080px;margin:0 auto}
+  header h1{font-size:1.5rem;margin:0 0 4px}
+  header p{color:var(--muted);margin:0 0 20px;max-width:78ch}
+  .grid{display:grid;grid-template-columns:330px 1fr;gap:20px}
+  .grid>div{min-width:0}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .card h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 14px}
+  label{display:block;font-size:.85rem;margin:14px 0 4px;font-weight:600}
+  select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;font:inherit}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .pill{display:inline-block;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:2px 9px;font-size:.78rem;font-weight:700}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  button{padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer;font:inherit;font-size:.85rem;font-weight:600;transition:.15s;flex:1 1 auto}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.ghost{color:var(--muted)}
+  .presets{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+  .presets button{text-align:left;font-size:.8rem;font-weight:600}
+  .presets button.on{background:#eff6ff;border-color:var(--accent);color:#1d4ed8}
+  canvas{width:100%;display:block}
+  .stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .stat .lab{font-size:.78rem;color:var(--muted)}
+  .stat .val{font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat.s .val{color:var(--stu)} .stat.w .val{color:var(--wel)}
+  .big{font-size:1.6rem}
+  .note{font-size:.82rem;color:var(--muted);margin-top:10px}
+  .legend{display:flex;gap:16px;font-size:.78rem;color:var(--muted);margin:6px 0 0;flex-wrap:wrap}
+  .legend i{display:inline-block;width:13px;height:13px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+  .verdict{margin-top:14px;padding:12px 14px;border-radius:10px;background:#f1f5f9;border:1px solid var(--line);font-size:.9rem}
+  .verdict b.bad{color:var(--nom)} .verdict b.good{color:var(--ok)}
+  .fx{font-family:"Cambria Math",Georgia,serif;font-size:.9rem;background:var(--bg);border-radius:8px;padding:8px 10px;margin-top:10px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>t de Student vs. t de Welch</h1>
+    <p>Los dos tests comparan las medias de dos grupos independientes. Student supone que los grupos tienen la <b>misma varianza</b>; Welch no. Fijá los tamaños y las dispersiones reales, y simulá miles de comparaciones. Con <b>δ = 0</b> las medias son iguales: un test válido debería rechazar H<sub>0</sub> solo en α % de los casos.</p>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Escenario</h2>
+      <label>Casos para probar</label>
+      <div class="presets" id="presets">
+        <button data-p="1">Varianzas iguales, n distintos</button>
+        <button data-p="2" class="on">Grupo chico con varianza grande</button>
+        <button data-p="3">Grupo chico con varianza chica</button>
+        <button data-p="4">n iguales, varianzas distintas</button>
+      </div>
+
+      <label>Tamaño del grupo 1: n<sub>1</sub> = <span class="pill" id="n1Val">10</span></label>
+      <input type="range" id="n1" min="3" max="200" step="1" value="10">
+      <label>Tamaño del grupo 2: n<sub>2</sub> = <span class="pill" id="n2Val">40</span></label>
+      <input type="range" id="n2" min="3" max="200" step="1" value="40">
+      <label>Desvío real del grupo 1: σ<sub>1</sub> = <span class="pill" id="s1Val">20</span></label>
+      <input type="range" id="s1" min="1" max="30" step="1" value="20">
+      <label>Desvío real del grupo 2: σ<sub>2</sub> = <span class="pill" id="s2Val">5</span></label>
+      <input type="range" id="s2" min="1" max="30" step="1" value="5">
+      <label>Diferencia real de medias: δ = μ<sub>1</sub> − μ<sub>2</sub> = <span class="pill" id="dVal">0</span></label>
+      <input type="range" id="d" min="0" max="20" step="0.5" value="0">
+      <label for="alpha">Nivel de significación α</label>
+      <select id="alpha">
+        <option value="0.01">0,01</option>
+        <option value="0.05" selected>0,05</option>
+        <option value="0.10">0,10</option>
+      </select>
+
+      <label>Simular comparaciones</label>
+      <div class="btns">
+        <button data-k="100">+100</button>
+        <button data-k="1000">+1000</button>
+        <button data-k="5000" class="primary">+5000</button>
+      </div>
+      <div class="btns"><button id="reset" class="ghost">Reiniciar</button></div>
+
+      <div class="fx">
+        Student: t = (x̄<sub>1</sub> − x̄<sub>2</sub>) / √(s<sub>p</sub>²(1/n<sub>1</sub> + 1/n<sub>2</sub>)), gl = n<sub>1</sub> + n<sub>2</sub> − 2<br>
+        Welch: t = (x̄<sub>1</sub> − x̄<sub>2</sub>) / √(s<sub>1</sub>²/n<sub>1</sub> + s<sub>2</sub>²/n<sub>2</sub>), gl de Welch–Satterthwaite
+      </div>
+      <p class="note">Las poblaciones son normales. Todo lo que ves se debe a la diferencia entre los dos tests.</p>
+    </div>
+
+    <div class="card">
+      <h2>Tasa de rechazo de H<sub>0</sub></h2>
+      <div class="stats">
+        <div class="stat s"><div class="lab">Student rechaza</div><div class="val big" id="rS">–</div></div>
+        <div class="stat w"><div class="lab">Welch rechaza</div><div class="val big" id="rW">–</div></div>
+      </div>
+      <div class="note" id="counts">Comparaciones simuladas: 0</div>
+
+      <canvas id="chart" width="720" height="380" style="margin-top:12px"></canvas>
+      <div class="legend">
+        <span><i style="background:var(--stu)"></i>Student</span>
+        <span><i style="background:var(--wel)"></i>Welch</span>
+        <span><i style="background:var(--nom)"></i>α nominal (y su margen esperado)</span>
+      </div>
+
+      <div class="verdict" id="verdict">Tocá «+5000» para simular.</div>
+
+      <div class="stats">
+        <div class="stat"><div class="lab">α nominal</div><div class="val" id="aNom">–</div></div>
+        <div class="stat"><div class="lab">gl medios de Welch</div><div class="val" id="dfW">–</div></div>
+        <div class="stat"><div class="lab">gl de Student</div><div class="val" id="dfS">–</div></div>
+        <div class="stat"><div class="lab">Margen esperado de la tasa</div><div class="val" id="band">–</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== librería estadística (t de Student) =====
+function lngamma(z){const g=7,c=[0.99999999999980993,676.5203681218851,-1259.1392167224028,771.32342877765313,-176.61502916214059,12.507343278686905,-0.13857109526572012,9.9843695780195716e-6,1.5056327351493116e-7];if(z<0.5)return Math.log(Math.PI/Math.sin(Math.PI*z))-lngamma(1-z);z-=1;let x=c[0];for(let i=1;i<g+2;i++)x+=c[i]/(z+i);const t=z+g+0.5;return 0.5*Math.log(2*Math.PI)+(z+0.5)*Math.log(t)-t+Math.log(x);}
+function betacf(a,b,x){const MAXIT=200,EPS=3e-12,FPMIN=1e-300;let qab=a+b,qap=a+1,qam=a-1,c=1,d=1-qab*x/qap;if(Math.abs(d)<FPMIN)d=FPMIN;d=1/d;let h=d;for(let m=1;m<=MAXIT;m++){let m2=2*m,aa=m*(b-m)*x/((qam+m2)*(a+m2));d=1+aa*d;if(Math.abs(d)<FPMIN)d=FPMIN;c=1+aa/c;if(Math.abs(c)<FPMIN)c=FPMIN;d=1/d;h*=d*c;aa=-(a+m)*(qab+m)*x/((a+m2)*(qap+m2));d=1+aa*d;if(Math.abs(d)<FPMIN)d=FPMIN;c=1+aa/c;if(Math.abs(c)<FPMIN)c=FPMIN;d=1/d;let del=d*c;h*=del;if(Math.abs(del-1)<EPS)break;}return h;}
+function ibeta(a,b,x){if(x<=0)return 0;if(x>=1)return 1;const lb=lngamma(a+b)-lngamma(a)-lngamma(b);const front=Math.exp(lb+a*Math.log(x)+b*Math.log(1-x));return x<(a+1)/(a+b+2)?front*betacf(a,b,x)/a:1-front*betacf(b,a,1-x)/b;}
+// p-valor bilateral de una t con df grados de libertad (df puede ser decimal)
+function pTwo(t,df){const x=df/(df+t*t);return ibeta(df/2,0.5,x);}
+function randn(){let u=0,v=0;while(!u)u=Math.random();while(!v)v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+
+// ===== estado =====
+let P={n1:10,n2:40,s1:20,s2:5,d:0,alpha:0.05};
+let N=0,rejS=0,rejW=0,sumDfW=0;
+function reset(){N=0;rejS=0;rejW=0;sumDfW=0;}
+
+function simulate(k){
+  const {n1,n2,s1,s2,d,alpha}=P;
+  for(let i=0;i<k;i++){
+    let a=0,a2=0,b=0,b2=0;
+    for(let j=0;j<n1;j++){const x=d+s1*randn();a+=x;a2+=x*x;}
+    for(let j=0;j<n2;j++){const x=s2*randn();b+=x;b2+=x*x;}
+    const m1=a/n1,m2=b/n2;
+    const v1=Math.max(1e-12,(a2-a*a/n1)/(n1-1)),v2=Math.max(1e-12,(b2-b*b/n2)/(n2-1));
+    const diff=m1-m2;
+    // Student
+    const dfS=n1+n2-2,sp2=((n1-1)*v1+(n2-1)*v2)/dfS;
+    const tS=diff/Math.sqrt(sp2*(1/n1+1/n2));
+    // Welch
+    const q1=v1/n1,q2=v2/n2,seW=Math.sqrt(q1+q2);
+    const dfW=(q1+q2)*(q1+q2)/(q1*q1/(n1-1)+q2*q2/(n2-1));
+    const tW=diff/seW;
+    if(pTwo(tS,dfS)<alpha)rejS++;
+    if(pTwo(tW,dfW)<alpha)rejW++;
+    sumDfW+=dfW; N++;
+  }
+  render();
+}
+
+// ===== canvas =====
+const cv=document.getElementById('chart'),ctx=cv.getContext('2d');
+function fit(c,cx,ratio){
+  const dpr=window.devicePixelRatio||1;
+  const w=Math.max(240,Math.round(c.getBoundingClientRect().width||c.parentElement.clientWidth));
+  const h=Math.round(w*ratio);
+  c.style.height=h+'px';
+  if(c.width!==Math.round(w*dpr)||c.height!==Math.round(h*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);}
+  cx.setTransform(dpr,0,0,dpr,0,0);
+  return {W:w,H:h};
+}
+let lastW=0;
+window.addEventListener('resize',()=>{const w=window.innerWidth;if(w!==lastW){lastW=w;render();}});
+
+function pct(x){return (x*100).toFixed(1).replace('.',',')+'%';}
+
+function draw(){
+  const {W,H}=fit(cv,ctx,window.innerWidth<560?0.85:0.5);
+  const pad={l:44,r:14,t:16,b:34},pw=W-pad.l-pad.r,ph=H-pad.t-pad.b;
+  ctx.clearRect(0,0,W,H);
+  const a=P.alpha, rS=N?rejS/N:0, rW=N?rejW/N:0;
+  const se=N?Math.sqrt(a*(1-a)/N):0, hi95=a+1.96*se, lo95=Math.max(0,a-1.96*se);
+  let ymax=Math.max(0.1,rS*1.18,rW*1.18,hi95*1.3,a*2);
+  ymax=Math.min(1,ymax);
+  const yPx=v=>pad.t+ph-ph*v/ymax;
+  // ejes y grilla
+  ctx.font='12px sans-serif';ctx.textAlign='right';ctx.fillStyle='#64748b';ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const v=ymax*i/4, y=yPx(v);
+    ctx.strokeStyle='#e2e8f0';ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
+    ctx.fillText(Math.round(v*100)+'%',pad.l-6,y+4);
+  }
+  // banda esperada alrededor de α
+  if(N){
+    ctx.fillStyle='rgba(220,38,38,.12)';
+    ctx.fillRect(pad.l,yPx(hi95),pw,Math.max(2,yPx(lo95)-yPx(hi95)));
+  }
+  // línea α
+  ctx.strokeStyle='#dc2626';ctx.lineWidth=2;ctx.setLineDash([6,4]);
+  ctx.beginPath();ctx.moveTo(pad.l,yPx(a));ctx.lineTo(W-pad.r,yPx(a));ctx.stroke();ctx.setLineDash([]);
+  // barras
+  const bw=Math.min(110,pw*0.28), gap=pw/2;
+  const bars=[{r:rS,c:'#2563eb',n:'Student'},{r:rW,c:'#d97706',n:'Welch'}];
+  bars.forEach((b,i)=>{
+    const cx=pad.l+gap*(i+0.5), x0=cx-bw/2, y=yPx(b.r);
+    ctx.fillStyle=b.c;ctx.fillRect(x0,y,bw,pad.t+ph-y);
+    ctx.textAlign='center';ctx.fillStyle='#1e293b';ctx.font='bold 14px sans-serif';
+    if(N)ctx.fillText(pct(b.r),cx,Math.max(14,y-6));
+    ctx.fillStyle='#64748b';ctx.font='13px sans-serif';
+    ctx.fillText(b.n,cx,H-10);
+  });
+  ctx.strokeStyle='#cbd5e1';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad.l,pad.t+ph);ctx.lineTo(W-pad.r,pad.t+ph);ctx.stroke();
+}
+
+function render(){
+  document.getElementById('n1Val').textContent=P.n1;
+  document.getElementById('n2Val').textContent=P.n2;
+  document.getElementById('s1Val').textContent=P.s1;
+  document.getElementById('s2Val').textContent=P.s2;
+  document.getElementById('dVal').textContent=String(P.d).replace('.',',');
+  const a=P.alpha, rS=N?rejS/N:null, rW=N?rejW/N:null;
+  document.getElementById('rS').textContent=N?pct(rS):'–';
+  document.getElementById('rW').textContent=N?pct(rW):'–';
+  document.getElementById('counts').textContent='Comparaciones simuladas: '+N.toLocaleString('es');
+  document.getElementById('aNom').textContent=pct(a);
+  document.getElementById('dfS').textContent=P.n1+P.n2-2;
+  document.getElementById('dfW').textContent=N?(sumDfW/N).toFixed(1).replace('.',','):'–';
+  const se=N?Math.sqrt(a*(1-a)/N):0;
+  document.getElementById('band').textContent=N?('± '+pct(1.96*se)):'–';
+
+  const v=document.getElementById('verdict');
+  if(N<300){
+    v.innerHTML='Simulá al menos unos cientos de comparaciones para ver una tendencia (tocá «+5000»).';
+  } else {
+    const lo=a-1.96*se, hi=a+1.96*se;
+    const st=x=>x<lo?'por debajo':(x>hi?'por encima':'dentro');
+    const sS=st(rS), sW=st(rW);
+    if(P.d===0){
+      const badS=sS!=='dentro', badW=sW!=='dentro';
+      let msg='Con H<sub>0</sub> verdadera (δ = 0) la tasa de rechazo debería ser ≈ '+pct(a)+'. ';
+      msg+='<b class="'+(badS?'bad':'good')+'">Student: '+pct(rS)+' ('+(badS?sS+' del margen':'dentro del margen')+')</b>. ';
+      msg+='<b class="'+(badW?'bad':'good')+'">Welch: '+pct(rW)+' ('+(badW?sW+' del margen':'dentro del margen')+')</b>.';
+      if(sS==='por encima')msg+=' Student rechaza de más: produce falsos positivos.';
+      if(sS==='por debajo')msg+=' Student rechaza de menos: es conservador y pierde potencia.';
+      v.innerHTML=msg;
+    } else {
+      v.innerHTML='Con δ = '+String(P.d).replace('.',',')+' la tasa de rechazo es la <b>potencia</b> del test: Student '+pct(rS)+' · Welch '+pct(rW)+'. Para comparar la validez de ambos, volvé a δ = 0.';
+    }
+  }
+  draw();
+}
+
+// ===== eventos =====
+const presets={
+  1:{n1:10,n2:40,s1:10,s2:10},
+  2:{n1:10,n2:40,s1:20,s2:5},
+  3:{n1:10,n2:40,s1:5,s2:20},
+  4:{n1:25,n2:25,s1:20,s2:5}
+};
+function syncInputs(){
+  for(const k of ['n1','n2','s1','s2','d'])document.getElementById(k).value=P[k];
+}
+function clearPresetMark(){document.querySelectorAll('#presets button').forEach(b=>b.classList.remove('on'));}
+document.querySelectorAll('#presets button').forEach(b=>b.addEventListener('click',()=>{
+  Object.assign(P,presets[b.dataset.p]);P.d=0;
+  clearPresetMark();b.classList.add('on');
+  syncInputs();reset();render();
+}));
+['n1','n2','s1','s2','d'].forEach(id=>document.getElementById(id).addEventListener('input',e=>{
+  P[id]=+e.target.value;clearPresetMark();reset();render();
+}));
+document.getElementById('alpha').addEventListener('change',e=>{P.alpha=+e.target.value;reset();render();});
+document.querySelectorAll('button[data-k]').forEach(b=>b.addEventListener('click',()=>simulate(+b.dataset.k)));
+document.getElementById('reset').addEventListener('click',()=>{reset();render();});
+
+render();
+</script>
+</body>
+</html>

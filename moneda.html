@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulador · El juego de la moneda</title>
+<style>
+  :root{--bg:#f7f8fa;--card:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0;
+    --accent:#2563eb;--rej:#dc2626;--obs:#d97706;--ok:#059669}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.5;padding:24px}
+  .wrap{max-width:1080px;margin:0 auto}
+  header h1{font-size:1.5rem;margin:0 0 4px}
+  header p{color:var(--muted);margin:0 0 20px;max-width:80ch}
+  .grid{display:grid;grid-template-columns:330px 1fr;gap:20px}
+  .grid>div{min-width:0}
+  @media(max-width:820px){.grid{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px 20px;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+  .card h2{font-size:.8rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 14px}
+  label{display:block;font-size:.85rem;margin:14px 0 4px;font-weight:600}
+  select{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:#fff;font:inherit}
+  input[type=range]{width:100%;accent-color:var(--accent)}
+  .pill{display:inline-block;background:#eff6ff;color:#1d4ed8;border-radius:999px;padding:2px 9px;font-size:.78rem;font-weight:700}
+  .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+  button{padding:9px 12px;border:1px solid var(--line);border-radius:9px;background:#fff;cursor:pointer;font:inherit;font-size:.85rem;font-weight:600;transition:.15s;flex:1 1 auto}
+  button:hover{border-color:var(--accent);color:var(--accent)}
+  button.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+  button.ghost{color:var(--muted)}
+  .seg{display:flex;gap:6px;margin-top:6px}
+  .seg button{flex:1;font-size:.8rem}
+  .seg button.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .presets button{font-size:.78rem;padding:7px 8px}
+  canvas{width:100%;display:block}
+  .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:14px}
+  @media(max-width:560px){.stats{grid-template-columns:1fr 1fr}}
+  .stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+  .stat .lab{font-size:.78rem;color:var(--muted)}
+  .stat .val{font-size:1.15rem;font-weight:700;font-variant-numeric:tabular-nums}
+  .stat.o .val{color:var(--obs)} .stat.r .val{color:var(--rej)}
+  .note{font-size:.82rem;color:var(--muted);margin-top:10px}
+  .legend{display:flex;gap:14px;font-size:.78rem;color:var(--muted);margin:8px 0 0;flex-wrap:wrap}
+  .legend i{display:inline-block;width:13px;height:13px;border-radius:3px;vertical-align:-2px;margin-right:5px}
+  .legend i.out{background:#fff;border:2px solid #334155}
+  .verdict{margin-top:14px;padding:12px 14px;border-radius:10px;background:#f1f5f9;border:1px solid var(--line);font-size:.9rem}
+  .sep{border:0;border-top:1px solid var(--line);margin:18px 0 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>El juego de la moneda</h1>
+    <p>Se tira una moneda <b>n</b> veces. Si fuera justa (H<sub>0</sub>: P(cara) = 0,5), el número de caras sigue una distribución binomial. Elegí un resultado y mirá qué tan raro sería con una moneda justa: esa probabilidad es el <b>p-valor exacto</b>. ¿A partir de cuántas caras dejarías de creer que es justa?</p>
+  </header>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Controles</h2>
+
+      <label>Número de tiradas: n = <span class="pill" id="nVal">100</span></label>
+      <input type="range" id="n" min="10" max="1000" step="1" value="100">
+
+      <label>Resultado a evaluar: <span class="pill" id="kVal">60</span> caras</label>
+      <input type="range" id="k" min="0" max="100" step="1" value="60">
+      <div class="btns presets" id="presets">
+        <button data-f="0.52">52-48</button>
+        <button data-f="0.55">55-45</button>
+        <button data-f="0.60">60-40</button>
+        <button data-f="0.70">70-30</button>
+        <button data-f="0.90">90-10</button>
+      </div>
+
+      <label>Tipo de prueba</label>
+      <div class="seg" id="tipo">
+        <button data-t="bi" class="on">Dos colas</button>
+        <button data-t="uni">Una cola (más caras)</button>
+      </div>
+      <div class="note" id="tipoNote"></div>
+
+      <label for="alpha">Nivel de significación α</label>
+      <select id="alpha">
+        <option value="0.01">0,01</option>
+        <option value="0.05" selected>0,05</option>
+        <option value="0.10">0,10</option>
+      </select>
+
+      <hr class="sep">
+      <label>Tirar la moneda de verdad: P(cara) real = <span class="pill" id="pVal">0,50</span></label>
+      <input type="range" id="p" min="0.30" max="0.70" step="0.01" value="0.5">
+      <div class="note">0,50 es una moneda justa. Cambialo para probar una moneda cargada.</div>
+      <div class="btns">
+        <button id="tirar" class="primary">Tirar n veces</button>
+        <button id="sim">+1000 experimentos</button>
+      </div>
+      <div class="btns"><button id="reset" class="ghost">Reiniciar experimentos</button></div>
+    </div>
+
+    <div class="card">
+      <h2>Número de caras con una moneda justa</h2>
+      <canvas id="chart" width="720" height="330"></canvas>
+      <div class="legend">
+        <span><i style="background:#93c5fd"></i>Probabilidad exacta (binomial)</span>
+        <span><i style="background:#dc2626"></i>Zona de rechazo (α)</span>
+        <span><i style="background:rgba(245,158,11,.35)"></i>Tan extremo como tu resultado</span>
+        <span><i class="out"></i>Frecuencia de tus experimentos</span>
+      </div>
+
+      <div class="stats">
+        <div class="stat o"><div class="lab">Resultado</div><div class="val" id="vRes">–</div></div>
+        <div class="stat o"><div class="lab">p-valor exacto</div><div class="val" id="vP">–</div></div>
+        <div class="stat"><div class="lab">Decisión</div><div class="val" id="vDec">–</div></div>
+        <div class="stat r"><div class="lab">Se rechaza si caras</div><div class="val" id="vCrit">–</div></div>
+        <div class="stat"><div class="lab">α real (tamaño exacto)</div><div class="val" id="vSize">–</div></div>
+        <div class="stat"><div class="lab">Experimentos</div><div class="val" id="vN">0</div></div>
+      </div>
+
+      <div class="verdict" id="verdict"></div>
+      <div class="verdict" id="simv" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== estado =====
+let P={n:100,p:0.5,tipo:'bi',alpha:0.05,k:60};
+let lf=[0];           // log-factoriales
+let sim={N:0,rej:0,counts:[],last:null};
+
+function buildLf(n){lf=new Array(n+1);lf[0]=0;for(let i=1;i<=n;i++)lf[i]=lf[i-1]+Math.log(i);}
+function pmf(k,n,p){
+  if(p<=0)return k===0?1:0; if(p>=1)return k===n?1:0;
+  return Math.exp(lf[n]-lf[k]-lf[n-k]+k*Math.log(p)+(n-k)*Math.log(1-p));
+}
+function resetSim(){sim={N:0,rej:0,counts:new Array(P.n+1).fill(0),last:null};}
+
+// colas bajo H0 (p = 0,5)
+function tails(){
+  const n=P.n, f=new Array(n+1);
+  for(let j=0;j<=n;j++)f[j]=pmf(j,n,0.5);
+  const lo=new Array(n+1),up=new Array(n+1);
+  let s=0;for(let j=0;j<=n;j++){s+=f[j];lo[j]=Math.min(1,s);}
+  s=0;for(let j=n;j>=0;j--){s+=f[j];up[j]=Math.min(1,s);}
+  return {f,lo,up};
+}
+function analysis(){
+  const n=P.n,{f,lo,up}=tails(),a=P.alpha,k=P.k;
+  let pv,crit,size,rejects;
+  if(P.tipo==='bi'){
+    pv=Math.min(1,2*Math.min(lo[k],up[k]));
+    let c=-1;for(let j=0;j<=Math.floor(n/2);j++){if(lo[j]<=a/2)c=j;else break;}
+    size=c>=0?Math.min(1,2*lo[c]):0;
+    rejects=x=>c>=0&&(x<=c||x>=n-c);
+    crit=c>=0?{c,text:'≤ '+c+' o ≥ '+(n-c)}:{c,text:'nunca'};
+  } else {
+    pv=up[k];
+    let c=n+1;for(let j=0;j<=n;j++){if(up[j]<=a){c=j;break;}}
+    size=c<=n?up[c]:0;
+    rejects=x=>c<=n&&x>=c;
+    crit=c<=n?{c,text:'≥ '+c}:{c,text:'nunca'};
+  }
+  return {f,pv,crit,size,rejects};
+}
+
+// ===== formato =====
+function fmt(x,d){return x.toFixed(d).replace('.',',');}
+const SUP={'-':'⁻','0':'⁰','1':'¹','2':'²','3':'³','4':'⁴','5':'⁵','6':'⁶','7':'⁷','8':'⁸','9':'⁹'};
+function fmtP(p){
+  if(p>=0.01)return fmt(p,p>=0.1?3:4).replace(/0+$/,'').replace(/,$/,'');
+  if(p>=0.001)return fmt(p,4);
+  if(p<=0)return '0';
+  const e=Math.floor(Math.log10(p)),m=p/Math.pow(10,e);
+  return fmt(m,1)+'·10'+String(e).split('').map(ch=>SUP[ch]).join('');
+}
+function pct(x,d=1){return fmt(x*100,d)+' %';}
+
+// ===== muestreo =====
+function oneExperiment(){let x=0;for(let i=0;i<P.n;i++)if(Math.random()<P.p)x++;return x;}
+function runExperiments(m,an){
+  for(let i=0;i<m;i++){
+    const x=oneExperiment();
+    sim.counts[x]++;sim.N++;if(an.rejects(x))sim.rej++;sim.last=x;
+  }
+}
+
+// ===== canvas =====
+const cv=document.getElementById('chart'),ctx=cv.getContext('2d');
+function fit(c,cx,ratio){
+  const dpr=window.devicePixelRatio||1;
+  const w=Math.max(240,Math.round(c.getBoundingClientRect().width||c.parentElement.clientWidth));
+  const h=Math.round(w*ratio);
+  c.style.height=h+'px';
+  if(c.width!==Math.round(w*dpr)||c.height!==Math.round(h*dpr)){c.width=Math.round(w*dpr);c.height=Math.round(h*dpr);}
+  cx.setTransform(dpr,0,0,dpr,0,0);
+  return {W:w,H:h};
+}
+let lastW=0;
+window.addEventListener('resize',()=>{const w=window.innerWidth;if(w!==lastW){lastW=w;render();}});
+
+function draw(an){
+  const {W,H}=fit(cv,ctx,window.innerWidth<560?0.8:0.45);
+  const pad={l:46,r:12,t:16,b:36},pw=W-pad.l-pad.r,ph=H-pad.t-pad.b,base=pad.t+ph;
+  ctx.clearRect(0,0,W,H);
+  const n=P.n,sd=Math.sqrt(n)/2;
+  let lo=0,hi=n;
+  if(n>60){lo=Math.max(0,Math.floor(n/2-4.6*sd));hi=Math.min(n,Math.ceil(n/2+4.6*sd));}
+  // si el resultado evaluado queda fuera del rango, se amplía
+  lo=Math.min(lo,P.k);hi=Math.max(hi,P.k);
+  const cnt=hi-lo+1, slot=pw/cnt, xPx=j=>pad.l+(j-lo)*slot;
+  let ymax=0;for(let j=lo;j<=hi;j++){ymax=Math.max(ymax,an.f[j]);if(sim.N)ymax=Math.max(ymax,sim.counts[j]/sim.N);}
+  ymax=Math.max(ymax*1.15,1e-6);
+  const yPx=v=>base-ph*v/ymax;
+  // grilla
+  ctx.font='12px sans-serif';ctx.textAlign='right';ctx.fillStyle='#64748b';ctx.lineWidth=1;
+  for(let i=0;i<=4;i++){
+    const v=ymax*i/4,y=yPx(v);
+    ctx.strokeStyle='#e2e8f0';ctx.beginPath();ctx.moveTo(pad.l,y);ctx.lineTo(W-pad.r,y);ctx.stroke();
+    const lv=v*100;ctx.fillText(fmt(lv,lv>=10?0:1)+'%',pad.l-6,y+4);
+  }
+  // zona tan extrema como el resultado (tinte)
+  const k=P.k;
+  ctx.fillStyle='rgba(245,158,11,.20)';
+  const inP=j=>P.tipo==='bi'?(Math.abs(j-n/2)>=Math.abs(k-n/2)-1e-9):(j>=k);
+  for(let j=lo;j<=hi;j++){if(inP(j))ctx.fillRect(xPx(j),pad.t,slot,ph);}
+  // barras exactas
+  const gap=slot>6?1:0;
+  for(let j=lo;j<=hi;j++){
+    const v=an.f[j],y=yPx(v);
+    ctx.fillStyle=an.rejects(j)?'#dc2626':'#93c5fd';
+    ctx.fillRect(xPx(j)+gap,y,Math.max(1,slot-2*gap),base-y);
+  }
+  // frecuencias de los experimentos (contorno)
+  if(sim.N){
+    ctx.strokeStyle='#334155';ctx.lineWidth=slot>5?1.5:1;
+    for(let j=lo;j<=hi;j++){
+      const v=sim.counts[j]/sim.N;if(v<=0)continue;
+      const y=yPx(v);
+      ctx.strokeRect(xPx(j)+gap+0.5,y,Math.max(1,slot-2*gap-1),base-y);
+    }
+  }
+  // línea del resultado
+  const xo=xPx(k)+slot/2;
+  ctx.strokeStyle='#d97706';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(xo,pad.t-4);ctx.lineTo(xo,base);ctx.stroke();
+  ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+  const lbl=k+' caras', lx=Math.min(Math.max(xo,pad.l+34),W-pad.r-34), lw=ctx.measureText(lbl).width+10;
+  ctx.fillStyle='rgba(255,255,255,.92)';ctx.fillRect(lx-lw/2,pad.t-4,lw,18);
+  ctx.fillStyle='#d97706';ctx.fillText(lbl,lx,pad.t+9);
+  // eje x
+  ctx.strokeStyle='#cbd5e1';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(pad.l,base);ctx.lineTo(W-pad.r,base);ctx.stroke();
+  ctx.fillStyle='#64748b';ctx.font='12px sans-serif';ctx.textAlign='center';
+  const ticks=5;
+  for(let i=0;i<=ticks;i++){const j=Math.round(lo+(hi-lo)*i/ticks);ctx.fillText(j,xPx(j)+slot/2,H-14);}
+  ctx.textAlign='right';ctx.fillText('número de caras',W-pad.r,H-1);
+}
+
+function render(){
+  const n=P.n,k=P.k,an=analysis();
+  document.getElementById('nVal').textContent=n;
+  document.getElementById('kVal').textContent=k;
+  document.getElementById('pVal').textContent=fmt(P.p,2);
+  document.getElementById('tipoNote').innerHTML=P.tipo==='bi'
+    ? 'H<sub>1</sub>: la moneda no es justa (cargada hacia cualquier lado). Cuenta resultados tan alejados de n/2 como el tuyo, en las dos direcciones.'
+    : 'H<sub>1</sub>: la moneda favorece a cara. Solo cuenta resultados con tantas caras o más.';
+
+  document.getElementById('vRes').textContent=k+'-'+(n-k)+' ('+pct(k/n,0)+')';
+  document.getElementById('vP').textContent=fmtP(an.pv);
+  const rej=an.pv<=P.alpha+1e-12;
+  const d=document.getElementById('vDec');d.textContent=rej?'Rechaza H₀':'No rechaza H₀';
+  d.style.color=rej?'var(--rej)':'var(--ok)';
+  document.getElementById('vCrit').textContent=an.crit.text;
+  document.getElementById('vSize').textContent=pct(an.size,2);
+  document.getElementById('vN').textContent=sim.N.toLocaleString('es');
+
+  const dir=P.tipo==='bi'?'un resultado al menos tan alejado de '+fmt(n/2,n%2?1:0)+' caras como '+k+' (en cualquier dirección)':''+k+' caras o más';
+  document.getElementById('verdict').innerHTML=
+    'Con una moneda justa, la probabilidad de obtener '+dir+' es <b>'+fmtP(an.pv)+'</b>'
+    +(an.pv>=0.001?' (' + pct(an.pv,an.pv<0.01?2:1) + ')':'')+'. '
+    +(rej?'Es menor que α = '+fmt(P.alpha,2)+': se <b style="color:var(--rej)">rechaza</b> que la moneda sea justa.'
+          :'No es menor que α = '+fmt(P.alpha,2)+': <b>no hay evidencia suficiente</b> para decir que la moneda no es justa. <span style="color:var(--muted)">No es lo mismo que demostrar que es justa.</span>')
+    +'<br><span style="color:var(--muted)">Como el número de caras es discreto, el nivel real de la prueba ('+pct(an.size,2)+') queda por debajo de α.</span>';
+
+  const sv=document.getElementById('simv');
+  if(sim.N>0){
+    sv.style.display='block';
+    const r=sim.rej/sim.N;
+    const justa=Math.abs(P.p-0.5)<1e-9;
+    sv.innerHTML=justa
+      ? 'En <b>'+sim.N.toLocaleString('es')+'</b> experimentos con una moneda justa, la prueba rechazó <b>'+pct(r)+'</b> de las veces. Son falsos positivos (error tipo I) y deberían rondar el α real, '+pct(an.size,2)+'.'
+      : 'En <b>'+sim.N.toLocaleString('es')+'</b> experimentos con P(cara) = '+fmt(P.p,2)+', la prueba rechazó <b>'+pct(r)+'</b> de las veces: esa es la <b>potencia</b> para detectar esta moneda cargada con n = '+n+'. En el resto no se dio cuenta (error tipo II).';
+    if(sim.last!==null)sv.innerHTML+='<br><span style="color:var(--muted)">Último experimento: '+sim.last+' caras.</span>';
+  } else sv.style.display='none';
+
+  draw(an);
+}
+
+// ===== eventos =====
+function setN(v){
+  const frac=P.n?P.k/P.n:0.6;
+  P.n=v;buildLf(v);
+  P.k=Math.max(0,Math.min(v,Math.round(frac*v)));
+  const ks=document.getElementById('k');ks.max=v;ks.value=P.k;
+  resetSim();
+}
+document.getElementById('n').addEventListener('input',e=>{setN(+e.target.value);render();});
+document.getElementById('k').addEventListener('input',e=>{P.k=+e.target.value;render();});
+document.querySelectorAll('#presets button').forEach(b=>b.addEventListener('click',()=>{
+  P.k=Math.round(+b.dataset.f*P.n);document.getElementById('k').value=P.k;render();
+}));
+document.querySelectorAll('#tipo button').forEach(b=>b.addEventListener('click',()=>{
+  P.tipo=b.dataset.t;document.querySelectorAll('#tipo button').forEach(x=>x.classList.toggle('on',x===b));resetSim();render();
+}));
+document.getElementById('alpha').addEventListener('change',e=>{P.alpha=+e.target.value;resetSim();render();});
+document.getElementById('p').addEventListener('input',e=>{P.p=+e.target.value;resetSim();render();});
+document.getElementById('tirar').addEventListener('click',()=>{
+  const an=analysis();runExperiments(1,an);
+  P.k=sim.last;document.getElementById('k').value=P.k;render();
+});
+document.getElementById('sim').addEventListener('click',()=>{runExperiments(1000,analysis());render();});
+document.getElementById('reset').addEventListener('click',()=>{resetSim();render();});
+
+buildLf(P.n);resetSim();
+document.getElementById('k').max=P.n;document.getElementById('k').value=P.k;
+render();
+</script>
+</body>
+</html>
